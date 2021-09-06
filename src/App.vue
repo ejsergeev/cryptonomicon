@@ -188,8 +188,12 @@
               border-purple-800 border-solid
               cursor-pointer
             "
+            :class="{
+              'border-4': t === sel
+            }"
             v-for="t in tickers"
             :key="t.name"
+            @click="select(t)"
           >
             <div class="px-4 py-5 sm:p-6 text-center">
               <dt class="text-sm font-medium text-gray-500 truncate">
@@ -216,7 +220,7 @@
                 transition-all
                 focus:outline-none
               "
-              @click="handleDelete(t)"
+              @click.stop="handleDelete(t)"
             >
               <svg
                 class="h-5 w-5"
@@ -236,17 +240,23 @@
         </dl>
         <hr class="w-full border-t border-gray-600 my-4" />
       </template>
-      <section class="relative">
+      <section class="relative" v-if="sel">
         <h3 class="text-lg leading-6 font-medium text-gray-900 my-8">
-          VUE - USD
+          {{ sel.name }} - USD
         </h3>
         <div class="flex items-end border-gray-600 border-b border-l h-64">
-          <div class="bg-purple-800 border w-10 h-24"></div>
-          <div class="bg-purple-800 border w-10 h-32"></div>
-          <div class="bg-purple-800 border w-10 h-48"></div>
-          <div class="bg-purple-800 border w-10 h-16"></div>
+          <div
+            class="bg-purple-800 border w-10"
+            :style="`height: ${bar}%`"
+            v-for="(bar, idx) in normalizeGraph()"
+            :key="idx"
+          ></div>
         </div>
-        <button type="button" class="absolute top-0 right-0">
+        <button
+          type="button"
+          class="absolute top-0 right-0"
+          @click="sel = null"
+        >
           <svg
             xmlns="http://www.w3.org/2000/svg"
             xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -279,34 +289,45 @@ export default {
   name: "App",
   data() {
     return {
-      ticker: "default",
-      tickers: [
-        {
-          name: "DEMO1",
-          price: "-"
-        },
-        {
-          name: "DEMO2",
-          price: "-"
-        },
-        {
-          name: "DEMO3",
-          price: "-"
-        }
-      ]
+      ticker: "",
+      sel: null,
+      tickers: [],
+      graph: []
     };
   },
   methods: {
     add() {
-      const newTicker = {
+      const currentTicker = {
         name: this.ticker,
         price: "-"
       };
-      this.tickers.push(newTicker);
+      this.tickers.push(currentTicker);
+      setInterval(async () => {
+        const f = await fetch(
+          `https://min-api.cryptocompare.com/data/price?fsym=${currentTicker.name}&tsyms=USD&api_key=61f312f3ea1a6860368aba389cbfdc14dbd94a6c35b38e39310a2c2fce4cbf43`
+        );
+        const data = await f.json();
+        this.tickers.find((t) => t.name === currentTicker.name).price =
+          data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
+        if (currentTicker.name === this.sel?.name) {
+          this.graph.push(data.USD);
+        }
+      }, 5000);
       this.ticker = "";
+    },
+    select(ticker) {
+      this.sel = ticker;
+      this.graph = [];
     },
     handleDelete(tickerToRemove) {
       this.tickers = this.tickers.filter((t) => t !== tickerToRemove);
+    },
+    normalizeGraph() {
+      const maxValue = Math.max(...this.graph);
+      const minValue = Math.min(...this.graph);
+      return this.graph.map(
+        (price) => 5 + ((price - minValue) * 95) / (maxValue - minValue)
+      );
     }
   }
 };
